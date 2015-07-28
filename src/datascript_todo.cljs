@@ -1,10 +1,15 @@
 (ns datascript-todo
-  (:require
+    (:import goog.History)
+    (:require
+    [secretary.core :as secretary :refer-macros [defroute]]
     [clojure.set :as set]
     [clojure.string :as str]
      cljs.reader
     [datascript :as d]
     [rum :include-macros true]
+    [figwheel.client :as fw]
+    [goog.events :as events]
+    [goog.history.EventType :as EventType]
     [cognitect.transit :as transit]
     [datascript-todo.dom :as dom]
     [datascript-todo.util :as u])
@@ -15,9 +20,19 @@
 
 (def schema {:todo/tags    {:db/cardinality :db.cardinality/many}
              :todo/project {:db/valueType :db.type/ref}})
+
 (defonce conn (d/create-conn schema))
 
 (declare render persist)
+
+(defn hook-browser-navigation! []
+  (doto (History.)
+    (events/listen
+     (fn [event]
+       (secretary/dispatch! (.-token event))))
+    (.setEnabled true)))
+
+(def page (atom :home))
 
 (defn reset-conn! [db]
   (reset! conn db)
@@ -164,15 +179,15 @@
                                  :where [?todo :todo/project ?pid]
                                         [?pid :project/name ?project]]
                             db)
-                          (sort-by second))]
+                       (sort-by second))]
       (group-item db name :project pid))])
 
 (rum/defc overview-pane [db]
   [:.overview-pane
     [:.group
       (group-item db "Inbox"     :inbox nil)
-      (group-item db "Completed" :completed nil)
-      (group-item db "All"       :all nil)]
+      (group-item db "Avklarade" :completed nil)
+      (group-item db "Alla"       :all nil)]
     (plan-group db)
     (projects-group db)])
 
@@ -204,7 +219,11 @@
             (when-let [project (:todo/project td)]
               [:span (:project/name project)])
             (for [tag (:todo/tags td)]
-              [:span tag])]]))])
+              [:span tag])]
+         [:.todo-editaction
+          [:a {:href (str "#/company/" (:db/id td))} "Redigera"]
+          ]
+         ]))])
 
 (defn extract-todo []
   (when-let [text (dom/value (dom/q ".add-text"))]
@@ -241,11 +260,11 @@
 
 (rum/defc add-view []
   [:form.add-view {:on-submit (fn [_] (add-todo) false)}
-    [:input.add-text    {:type "text" :placeholder "New task"}]
-    [:input.add-project {:type "text" :placeholder "Project"}]
-    [:input.add-tags    {:type "text" :placeholder "Tags"}]
-    [:input.add-due     {:type "text" :placeholder "Due date"}]
-    [:input.add-submit  {:type "submit" :value "Add task"}]])
+    [:input.add-text    {:type "text" :placeholder "Nytt företag"}]
+    [:input.add-project {:type "text" :placeholder "Projekt"}]
+    [:input.add-tags    {:type "text" :placeholder "Taggar"}]
+    [:input.add-due     {:type "text" :placeholder "Förfallodag"}]
+    [:input.add-submit  {:type "submit" :value "Skapa"}]])
 
 (rum/defc history-view [db]
   [:.history-view
@@ -260,15 +279,36 @@
       [:button.history-btn {:on-click (fn [_] (reset-conn! next))} "redo ›"]
       [:button.history-btn {:disabled true} "redo ›"])])
 
+(rum/defc edit-view [db]
+  (let [todos (d/q '[:find [?todo ...]
+                     :where [?todo :todo/done true]] db)
+        td (d/entity db (ffirst todos))
+        todo (:todo/text td)
+        ;a (for [eid (sort todos)
+        ;    :let [td (d/entity db eid)]
+       ]
+  [:form.add-view {:on-submit (fn [_] (add-todo) false)}
+    [:input.add-text    {:type "text" :value todo}]
+    [:input.add-project {:type "text" :placeholder "Projekt"}]
+    [:input.add-tags    {:type "text" :placeholder "Taggar"}]
+    [:input.add-due     {:type "text" :placeholder "Förfallodag"}]
+    [:input.add-submit  {:type "submit" :value "Skapa"}]]))
+
 (rum/defc canvas [db]
   [:.canvas
+    [:a {:href "#/"} "Hem"]
     [:.main-view
       (filter-pane db)
       (let [db (filtered-db db)]
         (list
           (overview-pane db)
           (todo-pane db)))]
-    (add-view)
+   (if (= @page :home)
+     (add-view)
+   )
+   (if (= @page :company)
+     (edit-view)
+   )
     (history-view db)])
 
 (defn render
@@ -354,4 +394,20 @@
 ;; for interactive re-evaluation
 (render)
 
+(secretary/set-config! :prefix "#")
 
+(fw/watch-and-reload
+ :websocket-url "ws://localhost:3449/figwheel-ws"
+ :jsload-callback #(render))
+
+(defroute home-path "/" []
+  (reset! page :home)
+  ;(println "HEM!!!")
+  (render))
+
+(defroute "/company/:id" {:as params}
+  (reset! page :company)
+  (println "company: " (:id params))
+  (render))
+
+(hook-browser-navigation!)

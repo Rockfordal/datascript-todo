@@ -11,3 +11,8 @@ pom.xml.asc
 /dev/out/*
 /dev/*.js
 .DS_Store
+/*-init.clj
+/resources/public/out
+/resources/public/target
+!/resources/public/target/todo.js
+/figwheel_server.log
