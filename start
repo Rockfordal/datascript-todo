@@ -1,0 +1,6 @@
+if type "rlwrap" > /dev/null; then
+  rlwrap lein figwheel
+else
+  echo "install rlwrap if for arrow history"
+  lein figwheel
+fi
