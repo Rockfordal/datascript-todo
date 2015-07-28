@@ -18,8 +18,11 @@
 
 (enable-console-print!)
 
-(def schema {:todo/tags    {:db/cardinality :db.cardinality/many}
-             :todo/project {:db/valueType :db.type/ref}})
+;(def schema {:todo/tags    {:db/cardinality :db.cardinality/many}
+;             :todo/project {:db/valueType :db.type/ref}})
+
+(def schema  {:item/shelf   {:db/valueType :db.type/ref}
+              :item/product {:db/valueType :db.type/ref}})
 
 (defonce conn (d/create-conn schema))
 
@@ -28,6 +31,7 @@
 (defn hook-browser-navigation! []
   (doto (History.)
     (events/listen
+     EventType/NAVIGATE
      (fn [event]
        (secretary/dispatch! (.-token event))))
     (.setEnabled true)))
@@ -294,18 +298,83 @@
     [:input.add-due     {:type "text" :placeholder "Förfallodag"}]
     [:input.add-submit  {:type "submit" :value "Skapa"}]]))
 
+(rum/defc product [product]
+  [:.product
+    [:span.id   (:db/id product)]
+    [:span.name (:product/name product)]])
+
+(rum/defc show-all-products [db]
+  [:.page
+    [:b "Företag"]
+    (for [[eid] (sort (d/q '[:find ?e :where [?e :product/name]] db))]
+    (product (d/entity db eid))
+    )])
+
+(rum/defc shelf [shelf]
+  [:.product
+    [:span.id   (:db/id shelf)]
+    [:span.name (:shelf/name shelf)]])
+
+(rum/defc item_v [item product shelf]
+  [:div
+    [:span (:db/id item)] [:span " "]
+    [:span (:item/quantity item)] [:span " "]
+    [:span (:product/name product)] [:span " "]
+    [:span (:shelf/name shelf)] 
+   ])
+
+(rum/defc show-all-shelfs [db]
+  [:div
+      [:b "Hylla"]
+      (for [[eid] (sort (d/q '[:find ?e :where [?e :shelf/name]] db))]
+        (shelf (d/entity db eid))
+        )])
+
+(rum/defc show-all-shelfs-and-products [db]
+  [:div
+     [:b "Sortiment"]
+   (for [[item product shelf] (d/q '[:find ?item ?product ?shelf
+                        :in $ ?shelfname :where
+                        [?shelf :shelf/name ?shelfname]
+                        [?item :item/shelf ?shelf]
+                        [?item :item/product ?product]       
+                        ]
+                   db "C1")]
+     (item_v (d/entity db item)
+       (d/entity db product)
+       (d/entity db shelf)
+       )
+   )])
+
+
 (rum/defc canvas [db]
   [:.canvas
+   [:h3
     [:a {:href "#/"} "Hem"]
+    ]
     [:.main-view
-      (filter-pane db)
-      (let [db (filtered-db db)]
-        (list
-          (overview-pane db)
-          (todo-pane db)))]
-   (if (= @page :home)
-     (add-view)
-   )
+     [:div.row
+      [:div.col.s6
+       (show-all-products db) [:br]
+       ]
+      [:div.col.s6
+       (show-all-shelfs db) [:br]
+
+       ]
+      ]
+     (show-all-shelfs-and-products db) [:br]
+      ;(filter-pane db)
+      ;(let [db (filtered-db db)]
+       ; (list
+          ;(overview-pane db)
+          ;(todo-pane db)
+       ;   )
+   ;  )
+   ]
+   ;(if (= @page :home)
+     ;(add-view)
+   ;)
+
    (if (= @page :company)
      (edit-view)
    )
@@ -374,7 +443,8 @@
 
 ;; persisting DB between page reloads
 (defn persist [db]
-  (js/localStorage.setItem "datascript-todo/db" (db->string db)))
+  ;(js/localStorage.setItem "datascript-todo/db" (db->string db))
+  )
 
 (d/listen! conn :persistence
   (fn [tx-report] ;; FIXME do not notify with nil as db-report
@@ -383,11 +453,16 @@
       (js/setTimeout #(persist db) 0))))
 
 ;; restoring once persisted DB on page load
-(if-let [stored (js/localStorage.getItem "datascript-todo/db")]
-  (do
-    (reset-conn! (string->db stored))
-    (swap! history conj @conn))
-  (d/transact! conn u/fixtures))
+;(if-let [stored (js/localStorage.getItem "datascript-todo/db")]
+;  (do
+;    (reset-conn! (string->db stored))
+;    (swap! history conj @conn))
+
+(def fixxa
+  (memoize (fn []
+    (d/transact! conn u/fixtures)
+    (println "transakterar fixtures"))))
+(fixxa)
 
 #_(js/localStorage.clear)
 
@@ -407,7 +482,7 @@
 
 (defroute "/company/:id" {:as params}
   (reset! page :company)
-  (println "company: " (:id params))
+  ;(println "company: " (:id params))
   (render))
 
 (hook-browser-navigation!)
