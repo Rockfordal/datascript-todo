@@ -304,8 +304,7 @@
     [:span.name (:product/name product)]])
 
 (rum/defc show-all-products [db]
-  [:.page
-    [:b "Företag"]
+  [:div
     (for [[eid] (sort (d/q '[:find ?e :where [?e :product/name]] db))]
     (product (d/entity db eid))
     )])
@@ -325,60 +324,57 @@
 
 (rum/defc show-all-shelfs [db]
   [:div
-      [:b "Hylla"]
-      (for [[eid] (sort (d/q '[:find ?e :where [?e :shelf/name]] db))]
-        (shelf (d/entity db eid))
-        )])
+    (for [[eid] (sort (d/q '[:find ?e :where [?e :shelf/name]] db))]
+    (shelf (d/entity db eid)))])
 
 (rum/defc show-all-shelfs-and-products [db]
   [:div
-     [:b "Sortiment"]
    (for [[item product shelf] (d/q '[:find ?item ?product ?shelf
                         :in $ ?shelfname :where
                         [?shelf :shelf/name ?shelfname]
                         [?item :item/shelf ?shelf]
-                        [?item :item/product ?product]       
-                        ]
+                        [?item :item/product ?product]]
                    db "C1")]
      (item_v (d/entity db item)
        (d/entity db product)
-       (d/entity db shelf)
-       )
-   )])
-
+       (d/entity db shelf)))])
 
 (rum/defc canvas [db]
   [:.canvas
-   [:h3
-    [:a {:href "#/"} "Hem"]
-    ]
+   [:h3 [:a {:href "#/"} "Hem"]]
     [:.main-view
      [:div.row
-      [:div.col.s6
-       (show-all-products db) [:br]
+      [:div.col.s3
+        [:div.card.blue-grey.darken-1
+         [:div.card-content.white-text
+          [:span.card-title "Företag"]
+          (show-all-products db) [:br]
+          [:div.card-action [:a {:href "#"} "ok"] ]]]
        ]
-      [:div.col.s6
-       (show-all-shelfs db) [:br]
-
-       ]
+      [:div.col.s3
+        [:div.card.blue-grey.darken-1
+         [:div.card-content.white-text
+          [:span.card-title "Hyllor"]
+          (show-all-shelfs db) [:br]
+          [:div.card-action [:a {:href "#"} "ok"] ]]]
       ]
-     (show-all-shelfs-and-products db) [:br]
+      [:div.col.s3
+        [:div.card.blue-grey.darken-1
+         [:div.card-content.white-text
+          [:span.card-title "Sortiment"]
+          (show-all-shelfs-and-products db) [:br]
+          [:div.card-action [:a {:href "#"} "ok"] ]]]
+       ]
+   ]
       ;(filter-pane db)
       ;(let [db (filtered-db db)]
        ; (list
           ;(overview-pane db)
-          ;(todo-pane db)
-       ;   )
-   ;  )
-   ]
-   ;(if (= @page :home)
-     ;(add-view)
-   ;)
-
-   (if (= @page :company)
-     (edit-view)
-   )
-    (history-view db)])
+          ;(todo-pane db) ;   ) ;  )
+   ;(if (= @page :home) ;(add-view) ;)
+   (if (= @page :company) (edit-view))
+      (history-view db)]]
+)
 
 (defn render
   ([] (render @conn))
